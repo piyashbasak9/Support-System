@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}Staff Dashboard - RAG Support System{% endblock %}
+
+{% block content %}
+<div class="header">
+    <h1>Support Dashboard</h1>
+    <p>Manage tickets, upload documents, and monitor system health</p>
+</div>
+
+<!-- Stats Cards -->
+<div class="stats">
+    <div class="stat-card">
+        <div class="stat-number">{{ stats.total }}</div>
+        <div class="stat-label">Total Tickets</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ stats.pending }}</div>
+        <div class="stat-label">Pending</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ stats.resolved }}</div>
+        <div class="stat-label">Resolved</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ "%.1f"|format(stats.resolution_rate) }}%</div>
+        <div class="stat-label">Resolution Rate</div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+    <button class="tab {% if filter == 'pending' %}active{% endif %}" onclick="location.href='/?filter=pending'">Pending</button>
+    <button class="tab {% if filter == 'resolved' %}active{% endif %}" onclick="location.href='/?filter=resolved'">Resolved</button>
+    <button class="tab {% if tab == 'upload' %}active{% endif %}" onclick="location.href='/?tab=upload'">📄 PDF Upload</button>
+</div>
+
+<!-- Tickets List -->
+{% if tab != 'upload' %}
+<div class="tickets">
+    {% if tickets %}
+        {% for ticket in tickets %}
+        <div class="ticket {{ ticket.status }}">
+            <div class="ticket-header">
+                <span class="ticket-id">{{ ticket.ticket_id }}</span>
+                <span class="ticket-status status-{{ ticket.status }}">{{ ticket.status|upper }}</span>
+            </div>
+            <div class="ticket-query">{{ ticket.query }}</div>
+            <div class="ticket-meta">
+                Created: {{ ticket.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+            </div>
+            
+            {% if ticket.extracted_text %}
+            <div class="ticket-extracted">
+                <strong>Extracted Text:</strong><br>
+                {{ ticket.extracted_text[:300] }}{% if ticket.extracted_text|length > 300 %}...{% endif %}
+            </div>
+            {% endif %}
+            
+            {% if ticket.status == 'pending' %}
+            <div class="answer-form">
+                <form action="/api/tickets/{{ ticket.ticket_id }}/resolve" method="post">
+                    <textarea name="answer" placeholder="Type your answer here..."></textarea>
+                    <button type="submit">Submit Answer</button>
+                </form>
+            </div>
+            {% elif ticket.answer %}
+            <div class="ticket-answer">
+                <strong>Answer:</strong><br>
+                {{ ticket.answer }}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% else %}
+        <div style="padding: 40px; text-align: center; color: #718096;">
+            No tickets found.
+        </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Upload Section (Tab) -->
+{% if tab == 'upload' %}
+<div class="upload-section">
+    <h2>📄 Upload Document to Knowledge Base</h2>
+    <form class="upload-form" action="/api/upload_pdf" method="post" enctype="multipart/form-data">
+        <input type="file" name="file" accept=".pdf" required>
+        <button type="submit">Upload PDF</button>
+    </form>
+    
+    {% if upload_message %}
+    <div class="message {{ upload_status }}">
+        {{ upload_message }}
+    </div>
+    {% endif %}
+    
+    <p style="margin-top: 15px; font-size: 12px; color: #718096;">
+        Supported formats: PDF only. Maximum file size: 10MB.
+    </p>
+    
+    <!-- Uploaded PDFs List -->
+    <div style="margin-top: 40px;">
+        <h3>📚 Uploaded PDFs</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px;">
+            {% if uploaded_files %}
+                {% for file in uploaded_files %}
+                <div style="background: #f7fafc; padding: 15px; border-radius: 8px; border-left: 4px solid #667eea;">
+                    <div style="font-weight: 600; margin-bottom: 8px; color: #1a202c;">{{ file.name }}</div>
+                    <div style="font-size: 12px; color: #718096; margin-bottom: 5px;">Size: {{ (file.size / 1024 / 1024) | round(2) }} MB</div>
+                    <div style="font-size: 12px; color: #718096; margin-bottom: 10px;">Uploaded: {{ file.modified }}</div>
+                    <form action="/api/delete_pdf" method="post" onsubmit="return confirm('Delete this PDF?');" style="display: inline-block;">
+                        <input type="hidden" name="filename" value="{{ file.name }}">
+                        <button type="submit" style="background: #e53e3e; color: white; padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: background 0.2s;" onmouseover="this.style.background='#c53030'" onmouseout="this.style.background='#e53e3e'">Delete</button>
+                    </form>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p style="color: #718096; grid-column: 1 / -1;">No PDFs uploaded yet.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

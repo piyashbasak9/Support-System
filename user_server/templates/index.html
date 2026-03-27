@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block title %}Ask Questions - RAG Support System{% endblock %}
+
+{% block content %}
+<div class="header">
+    <h1>RAG Support System</h1>
+    <p>Get instant answers from our knowledge base or create a support ticket</p>
+</div>
+
+<div class="main-card">
+    <div class="card-content">
+        <form id="questionForm" enctype="multipart/form-data">
+            <div class="form-group">
+                <label class="form-label" for="query">Your Question</label>
+                <textarea
+                    class="form-input"
+                    id="query"
+                    name="query"
+                    rows="4"
+                    placeholder="Ask me anything about our products, services, or policies..."
+                    required
+                ></textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Attach File (Optional)</label>
+                <div class="file-input-wrapper">
+                    <input type="file" id="file" name="file" class="file-input" accept=".pdf,.jpg,.jpeg,.png">
+                    <div class="file-input-label">
+                        Click to upload file or drag and drop
+                    </div>
+                    <div class="file-name"></div>
+                </div>
+                <small style="color: #718096; margin-top: 4px; display: block;">
+                    Max file size: 10MB. Supported formats: PDF, JPG, JPEG, PNG
+                </small>
+            </div>
+
+            <button type="submit" class="submit-btn" id="submitBtn">
+                <span id="btnText">Ask Question</span>
+            </button>
+        </form>
+
+        <div id="response" style="display: none;">
+            <!-- Response will be inserted here -->
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('questionForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const queryInput = document.getElementById('query');
+    const query = queryInput.value.trim();
+
+    // Client-side validation
+    if (!query) {
+        alert('Please enter a question before submitting.');
+        queryInput.focus();
+        return;
+    }
+
+    const submitBtn = document.getElementById('submitBtn');
+    const btnText = document.getElementById('btnText');
+    const responseDiv = document.getElementById('response');
+
+    // Show loading state
+    submitBtn.disabled = true;
+    btnText.innerHTML = '<div class="loading"></div>Processing...';
+
+    // Clear previous response
+    responseDiv.style.display = 'none';
+    responseDiv.innerHTML = '';
+
+    try {
+        const formData = new FormData();
+        formData.append('query', query);
+        
+        // Add file if selected
+        const fileInput = document.getElementById('file');
+        if (fileInput.files.length > 0) {
+            formData.append('file', fileInput.files[0]);
+        }
+
+        const response = await fetch('/ask', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        // Hide loading
+        submitBtn.disabled = false;
+        btnText.textContent = 'Ask Question';
+
+        // Show response
+        responseDiv.style.display = 'block';
+
+        // Check if response was successful
+        if (!response.ok) {
+            responseDiv.innerHTML = `
+                <div class="response error">
+                    <h3>Error</h3>
+                    <p>${data.detail || 'Sorry, there was an error processing your request. Please try again.'}</p>
+                </div>
+            `;
+        } else if (data.status === 'success') {
+            responseDiv.innerHTML = `
+                <div class="response success">
+                    <h3>Answer Found!</h3>
+                    <p>${data.answer}</p>
+                    ${data.sources && data.sources.length > 0 ? `
+                        <div class="sources">
+                            <strong>Sources:</strong>
+                            ${data.sources.map(source => `
+                                <div class="source">
+                                    ${source.text.substring(0, 200)}${source.text.length > 200 ? '...' : ''}
+                                    <br><small>Relevance: ${(source.score * 100).toFixed(1)}%</small>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        } else if (data.status === 'ticket_created') {
+            responseDiv.innerHTML = `
+                <div class="response ticket">
+                    <h3>Support Ticket Created</h3>
+                    <p>${data.message}</p>
+                    <p><strong>Ticket ID:</strong> <span class="ticket-id">${data.ticket_id}</span></p>
+                    <p>A support agent will contact you soon with assistance.</p>
+                </div>
+            `;
+        } else {
+            responseDiv.innerHTML = `
+                <div class="response error">
+                    <h3>Error</h3>
+                    <p>Sorry, there was an error processing your request. Please try again.</p>
+                </div>
+            `;
+        }
+
+        // Scroll to response
+        responseDiv.scrollIntoView({ behavior: 'smooth' });
+
+    } catch (error) {
+        submitBtn.disabled = false;
+        btnText.textContent = 'Ask Question';
+
+        responseDiv.style.display = 'block';
+        responseDiv.innerHTML = `
+            <div class="response error">
+                <h3>Network Error</h3>
+                <p>Sorry, there was a network error. Please check your connection and try again.</p>
+            </div>
+        `;
+    }
+});
+
+// Drag and drop functionality
+const fileInputWrapper = document.querySelector('.file-input-wrapper');
+const fileInput = document.getElementById('file');
+const fileLabel = document.querySelector('.file-input-label');
+
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    fileInputWrapper.addEventListener(eventName, preventDefaults, false);
+});
+
+function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+['dragenter', 'dragover'].forEach(eventName => {
+    fileInputWrapper.addEventListener(eventName, highlight, false);
+});
+
+['dragleave', 'drop'].forEach(eventName => {
+    fileInputWrapper.addEventListener(eventName, unhighlight, false);
+});
+
+function highlight(e) {
+    fileInputWrapper.classList.add('dragover');
+}
+
+function unhighlight(e) {
+    fileInputWrapper.classList.remove('dragover');
+}
+
+fileInputWrapper.addEventListener('drop', handleDrop, false);
+
+function handleDrop(e) {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+
+    if (files.length > 0) {
+        fileInput.files = files;
+        handleFileSelect({ target: fileInput });
+    }
+}
+</script>
+
+<style>
+.dragover .file-input-label {
+    border-color: #48bb78;
+    background: #f0fff4;
+}
+
+@media (max-width: 768px) {
+    textarea.form-input {
+        font-size: 16px; /* Prevents zoom on iOS */
+    }
+}
+</style>
+{% endblock %}
